@@ -1,6 +1,7 @@
 import queue
 import pygame
 import random
+import math
 
 pygame.init()  # initiates pygame
 
@@ -10,7 +11,9 @@ COLORS = {
     'red': (255, 0, 0),
     'green': (0, 255, 0),
     'blue': (0, 0, 255),
-    'black': (0, 0, 0)
+    'black': (0, 0, 0),
+    'yellow': (228, 222, 0),
+    'light_blue': (133, 138, 229)
 }
 
 # menu actions
@@ -228,6 +231,8 @@ class Grid:
                     S : starting point
                     E : ending point
                     # : wall (not valid)
+                    P : pointer
+                    H : head of the algo 
                 '''
                 if GRID[j][i] == 0:
                     color = COLORS['white']
@@ -235,6 +240,10 @@ class Grid:
                     color = COLORS['green']
                 elif GRID[j][i] == 2:
                     color = COLORS['red']
+                elif GRID[j][i] == 'P':
+                    color = COLORS['yellow']
+                elif GRID[j][i] == 'H':
+                    color = COLORS['light_blue']
                 elif GRID[j][i] == 'S':
                     color = COLORS['red']
                 elif GRID[j][i] == 'E':
@@ -393,10 +402,13 @@ class Search:
         self.visited = []
         self.backtrack = {}
         self.GRID = grid
+        self.unseen = {}
+        self.unvisited = {}
         self.started = False
         self.cell = self.get_start()
         self.counter = 0
         self.start_searching = False
+
 
     def search_init(self):  # when we find the starting point we initiate
         self.start = self.get_start()
@@ -436,7 +448,7 @@ class Search:
                         end = (i, j)
         return end
 
-    def get_cell(self, move):
+    def get_cell(self, move, cell):
         '''
             searches for the cell in the matrix
             params: tuple
@@ -446,7 +458,7 @@ class Search:
             D: down
             U: up
         '''
-        i, j = self.cell
+        i, j = cell
         for letter in move:
             if letter == 'L':
                 i -= 1
@@ -473,6 +485,7 @@ class Search:
             if not self.GRID[cell[1]][cell[0]] == char:
                 return True
         return False
+
 
     # def maze_valid_move(self, cell):
     #     '''
@@ -522,7 +535,8 @@ class Search:
 
     def bck_path(self):     # TODO: realtime backtrack
         '''
-            finds the most effiecient backtrack path
+            finds the most effiecient backtrack pathfor move in ['L', 'U', 'R', 'D']:
+                    if self.valid_move(self.get_cell(move)):
             params: self
             returns: list of tuples (path) from end to start
         '''
@@ -552,7 +566,7 @@ class Search:
             # ________________________________ queue appending __________________________________
 
             for move in ['L', 'U', 'R', 'D']:
-                put = self.get_cell(move)               # moves to append to queue
+                put = self.get_cell(move, self.cell)               # moves to append to queue
                 if self.valid_move(put):                # validate
                     self.frontier.put(put)              # add validated moves to queue
                     self.backtrack[put] = self.cell     # add to backtrack
@@ -575,6 +589,73 @@ class Search:
         elif self.frontier.empty() and not self.found_path():   # no path to find
             # TODO: blit path cannot be found
             print('path cannot be found')
+
+    def init_dijkstra(self):
+        '''
+            initiates dijkstras search algorithm
+            param: None
+            returns: None
+
+        '''
+        # reset the values
+        self.start = self.get_start()
+        self.end = self.get_end()
+        self.visited = []
+        self.backtrack = {}
+        self.counter = 0
+
+        # rreset the weights and the start/end
+        for j, row in enumerate(self.GRID):
+            for i, _ in enumerate(row):
+                self.unseen[(i, j)] = {move: 1 for move in ['L', 'U', 'R', 'D'] if self.valid_move(self.get_cell(move, (i, j)))}
+
+        for node in self.unseen:
+            if node == self.start:
+                self.unvisited[node] = 0
+            else:
+                self.unvisited[node] = math.inf
+
+
+    def dijkstra(self): #TODO: organize
+        ''' 
+            main dijkstras algorithm, default weights are 1
+            params: None
+            returns: None
+        '''
+        if not self.found_path():
+            min_node = (None, math.inf)
+            for node in self.unvisited: # get the node with the min value 
+                if node not in self.visited:
+                    if self.unvisited[node] < min_node[1]:
+                        min_node = (node, self.unvisited[node])
+                        # we can change the color here
+
+            for child, weight in self.unseen[min_node[0]].items():
+                child_node = self.get_cell(child, min_node[0])
+                if self.unvisited[child_node] > min_node[1] + weight:
+                    self.unvisited[child_node] = min_node[1] + weight
+                    self.backtrack[child_node] = min_node[0]
+                    
+                    if self.GRID[child_node[1]][child_node[0]] in [0, 'H']: # animation for the head of the algorithm
+                        self.GRID[child_node[1]][child_node[0]] = 'P'
+
+            self.visited.append(min_node[0])
+            node = min_node[0]
+            if self.GRID[node[1]][node[0]] in [0, 'H', 'P']:
+                self.GRID[node[1]][node[0]] = 1
+            self.unseen.pop(min_node[0])
+        elif self.found_path:
+            path = self.bck_path()                      # get the path from bck
+
+            if 0 <= self.counter < len(path):           # animation stuff
+                pos = path[self.counter]                # extra animation stuff
+
+                if self.GRID[pos[1]][pos[0]] == 1:      # coloring
+                    self.GRID[pos[1]][pos[0]] = 2
+                self.counter += 1
+
+
+        
 
     def maze_generator(self, run):  # counter will do a 2 step count
 
@@ -661,6 +742,9 @@ class Core:
         self.row_counter = 0
         self.active_box = False
         self.text_margin_x, self.text_margin_y = 6, 1
+        self.start_dijkstra = False
+
+
 
     def generation_init(self):
         self.walls = []
@@ -802,6 +886,10 @@ class Core:
             self.grid = self.Grid.clear_grid(self.grid)
             self.generate = True
             self.lower_menu[0] = 1
+        if self.lower_menu[1] == 'clicked':
+            self.search.init_dijkstra()
+            self.start_dijkstra = True
+            self.lower_menu[1] = 1
 
     def redraw(self):
         '''
@@ -829,7 +917,8 @@ class Core:
         start = self.search.get_start()
         end = self.search.get_end()
         self.search.__init__(start, end, self.grid)
-
+        self.search.init_dijkstra()
+        
     def run(self):    # main loop and actions
         '''
             main loop
@@ -910,7 +999,9 @@ class Core:
                 self.search.maze_generator(self)
 
     # ______________________________________redraw the frames ___________________________________________
-
+            if self.start_dijkstra:
+                self.search.dijkstra()
+            
             self.redraw()
 
 
