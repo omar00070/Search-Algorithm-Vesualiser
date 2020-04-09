@@ -373,7 +373,7 @@ class Grid:
         '''
         for j, row in enumerate(grid):
             for i, char in enumerate(row):
-                if char == 1 or char == 2:
+                if char in [1, 2, 'P', 'H']:
                     grid[j][i] = 0
         return grid
 
@@ -629,21 +629,27 @@ class Search:
                     if self.unvisited[node] < min_node[1]:
                         min_node = (node, self.unvisited[node])
                         # we can change the color here
+            
+            if min_node[0] == None: # no path
+                print('path cannot be found')
+                #TODO: blit path cannot be found
+            else:
 
-            for child, weight in self.unseen[min_node[0]].items():
-                child_node = self.get_cell(child, min_node[0])
-                if self.unvisited[child_node] > min_node[1] + weight:
-                    self.unvisited[child_node] = min_node[1] + weight
-                    self.backtrack[child_node] = min_node[0]
-                    
-                    if self.GRID[child_node[1]][child_node[0]] in [0, 'H']: # animation for the head of the algorithm
-                        self.GRID[child_node[1]][child_node[0]] = 'P'
+                for child, weight in self.unseen[min_node[0]].items():
+                    child_node = self.get_cell(child, min_node[0])
+                    if self.unvisited[child_node] > min_node[1] + weight:
+                        self.unvisited[child_node] = min_node[1] + weight
+                        self.backtrack[child_node] = min_node[0]
+                        
+                        if self.GRID[child_node[1]][child_node[0]] in [0, 'H']: # animation for the head of the algorithm
+                            self.GRID[child_node[1]][child_node[0]] = 'P'
 
-            self.visited.append(min_node[0])
-            node = min_node[0]
-            if self.GRID[node[1]][node[0]] in [0, 'H', 'P']:
-                self.GRID[node[1]][node[0]] = 1
-            self.unseen.pop(min_node[0])
+                self.visited.append(min_node[0])
+                node = min_node[0]
+                if self.GRID[node[1]][node[0]] in [0, 'H', 'P']:
+                    self.GRID[node[1]][node[0]] = 1
+                self.unseen.pop(min_node[0])
+            
         elif self.found_path:
             path = self.bck_path()                      # get the path from bck
 
@@ -655,7 +661,7 @@ class Search:
                 self.counter += 1
 
 
-        
+            
 
     def maze_generator(self, run):  # counter will do a 2 step count
 
@@ -828,14 +834,17 @@ class Core:
             start = self.search.get_start()
             end = self.search.get_end()
             self.search.__init__(start, end, run.grid)
+            self.grid = self.Grid.clean_grid(self.grid)
             RESET = False
             self.right_menu[0] = 1
         if self.right_menu[1] == 'clicked':
             START = False
+            self.start_dijkstra = False
             self.right_menu[1] = 1
         if self.right_menu[2] == 'clicked':
             START = False
             RESET = True
+            self.start_dijkstra = False
             self.right_menu[2] = 1
         else:
             RESET = False
@@ -887,6 +896,7 @@ class Core:
             self.generate = True
             self.lower_menu[0] = 1
         if self.lower_menu[1] == 'clicked':
+            self.grid = self.Grid.clean_grid(self.grid)
             self.search.init_dijkstra()
             self.start_dijkstra = True
             self.lower_menu[1] = 1
@@ -918,7 +928,7 @@ class Core:
         end = self.search.get_end()
         self.search.__init__(start, end, self.grid)
         self.search.init_dijkstra()
-        
+
     def run(self):    # main loop and actions
         '''
             main loop
@@ -966,7 +976,7 @@ class Core:
                 # give a live update when dragging the cells
                     while not self.search.found_path() and not self.search.frontier.empty():
                         self.search.search()
-                        updating = True
+                        # updating = True
             # ________________________________drag and drop live effect ______________________________
 
                 if self.search.is_start() and self.search.is_end():
@@ -1000,7 +1010,29 @@ class Core:
 
     # ______________________________________redraw the frames ___________________________________________
             if self.start_dijkstra:
-                self.search.dijkstra()
+                START = False
+
+                if self.Grid.drawing or self.Grid.removing:
+                    self.live_update_init()     # initiate the grid
+
+                # give a live update when dragging the cells
+                    while not self.search.found_path():
+                        self.search.dijkstra()
+                        # updating = True
+
+    # ________________________________drag and drop live effect ______________________________
+
+                if self.search.is_start() and self.search.is_end():
+                    if self.Grid.drag_start or self.Grid.drag_end:
+                        self.live_update_init()  # initiate the grid
+
+                        # give a live update when dragging the cells
+                        while not self.search.found_path():
+                            self.search.dijkstra()
+
+                    self.search.dijkstra()
+                else:
+                    self.start_dijkstra = False
             
             self.redraw()
 
